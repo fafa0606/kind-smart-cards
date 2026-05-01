@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智慧學習卡 - 音效重置版</title>
+    <style>
+        /* 整體版面與背景設定 */
+        body { font-family: "PingFang TC", "Heiti TC", "Microsoft JhengHei", sans-serif; background: linear-gradient(135deg, #ffedcc 0%, #ffd180 100%); display: flex; flex-direction: column; align-items: center; padding: 15px; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; overscroll-behavior: none; }
+        
+        /* 載入中遮罩畫面 */
+        #loadingScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffedcc; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; }
+        
+        /* 歡迎頁首設計 */
+        .welcome-text { width: 100%; max-width: 380px; font-size: 1.2rem; line-height: 1.6; color: #1976d2; margin-bottom: 40px; text-align: left; }
+        .welcome-text strong { color: #d32f2f; }
+        
+        /* 準備中文字與動畫 */
+        #loadingText { color: #6d4c41; font-size: 1.1rem; font-weight: bold; text-align: center; }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(109, 76, 65, 0.3); border-top: 4px solid #6d4c41; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* 開始與重試按鈕樣式 */
+        .btn-start { background-color: #4caf50; color: white; border: none; padding: 15px 40px; font-size: 1.2rem; font-weight: bold; border-radius: 25px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s; display: none; }
+        .btn-start:active { transform: translateY(2px); }
+        .btn-retry { background-color: #1976d2; color: white; border: none; padding: 12px 30px; font-size: 1.1rem; font-weight: bold; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); margin-top: 15px;}
+        .btn-retry:active { transform: translateY(2px); }
+
+        /* 主畫面容器 */
+        #appContent { display: none; flex-direction: column; align-items: center; width: 100%; height: 100%; }
+        
+        /* 頂部進度條 */
+        .header-progress { width: 100%; max-width: 380px; margin-bottom: 15px; }
+        .progress-info { display: flex; justify-content: flex-end; margin-bottom: 5px; font-size: 0.85rem; font-weight: bold; color: #6d4c41; }
+        .progress-bar-bg { background-color: rgba(255, 255, 255, 0.6); height: 8px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); }
+        .progress-bar-fill { background-color: #6d4c41; height: 100%; width: 0%; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* 卡片主體結構 */
+        .card-container { perspective: 1200px; width: 90vw; max-width: 380px; flex-grow: 1; max-height: 50vh; cursor: pointer; -webkit-tap-highlight-color: transparent;}
+        .card { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .card.is-flipped { transform: rotateY(180deg); }
+        .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; border-radius: 20px; background: white; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        .card-front { justify-content: space-between; z-index: 2; }
+        .card-front h2 { font-size: 1.15rem; margin: 0; line-height: 1.4; color: #333; display: flex; align-items: center; justify-content: center; flex-grow: 1; text-wrap: balance;}
+        .image-box { width: 100%; height: 55%; border-radius: 12px; background-color: #fafafa; overflow: hidden; margin: 10px 0; display:flex; justify-content:center; align-items:center;}
+        .q-image { width: 100%; height: 100%; object-fit: cover; }
+        .hint-text { font-size: 0.9rem; color: #6d4c41; font-weight: bold; margin: 0; animation: breathe 2s infinite ease-in-out;}
+        .card-back { transform: rotateY(180deg); background-color: #fffdfb; justify-content: space-between; }
+        .ans-body { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; overflow-y: auto; }
+        .ans-text { font-size: 1.05rem; line-height: 1.5; margin-bottom: 10px; color: #444; font-weight: bold;}
+        .example-text { font-size: 0.9rem; color: #6d4c41; background: #fff8f0; padding: 10px; border-radius: 8px; border-left: 4px solid #6d4c41; }
+        
+        /* 操作按鈕與底部統計 */
+        .feedback-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
+        .btn-fb { border: none; padding: 12px 5px; border-radius: 10px; color: white; font-weight: bold; font-size: 0.95rem; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .btn-fb:active { transform: translateY(2px); }
+        .bottom-controls { width: 100%; max-width: 380px; display: flex; align-items: center; justify-content: space-between; margin-top: 15px; }
+        .stats-container { display: flex; justify-content: space-around; flex-grow: 1; font-size: 0.8rem; font-weight: bold; background: rgba(255,255,255,0.4); padding: 10px; border-radius: 12px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);}
+        .error-msg { color: red; font-weight: bold; font-size: 14px; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- 載入等待畫面 -->
+    <div id="loadingScreen">
+        <div class="welcome-text">
+            歡迎您來到「<strong>慈心薰習調柔無瞋</strong>」的智慧園區，<br>
+            我將和您一起複習這篇開示的十道題目，<br>
+            若已思考完畢，就點擊圖片翻面查看答案，<br>
+            並依據熟悉程度，點擊下方的「<strong>答不出</strong>」、「<strong>沒記住</strong>」、「<strong>還不熟</strong>」、「<strong>已過關</strong>」，我將依照您對各別題目的熟悉度，調整題目出現的頻率。
+        </div>
+        
+        <div class="spinner" id="loadingSpinner"></div>
+        <!-- 🌟 更新文案 -->
+        <div id="loadingText">在我準備的空檔時，您可以再複習一下唷！ (<span id="loadProgress">0</span>/10)</div>
+        
+        <button id="startBtn" class="btn-start" onclick="finishLoading()">開始複習</button>
+    </div>
+
+    <!-- 主程式區塊 -->
+    <div id="appContent">
+        <div class="header-progress">
+            <div class="progress-info"><span id="remainCount">載入中...</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBar"></div></div>
+        </div>
+        <div class="card-container" onclick="flipCard()">
+            <div class="card" id="card">
+                <div class="card-face card-front">
+                    <h2 id="qText">系統啟動中...</h2>
+                    <div class="image-box">
+                        <img id="qImg" class="q-image" src="" alt="圖片" onerror="showImageError()">
+                        <div id="imgError" class="error-msg">⚠️ 找不到圖片: <span id="errName"></span></div>
+                    </div>
+                    <p class="hint-text">點擊卡片翻面看答案</p>
+                </div>
+                <div class="card-face card-back">
+                    <div class="ans-body">
+                        <p class="ans-text" id="aText"></p>
+                        <p class="example-text" id="eText"></p>
+                    </div>
+                    <div class="feedback-grid">
+                        <button class="btn-fb" style="background:#ff5252;" onclick="processFeedback('hard', event)">答不出</button>
+                        <button class="btn-fb" style="background:#ff9800;" onclick="processFeedback('effort', event)">沒記住</button>
+                        <button class="btn-fb" style="background:#4caf50;" onclick="processFeedback('good', event)">還不熟</button>
+                        <button class="btn-fb" style="background:#2196f3;" onclick="processFeedback('easy', event)">已過關</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bottom-controls" id="bottomControls">
+            <div class="stats-container">
+                <div style="color: #d32f2f">答不出: <span id="count-hard">0</span></div>
+                <div style="color: #ef6c00">沒記住: <span id="count-effort">0</span></div>
+                <div style="color: #388e3c">還不熟: <span id="count-good">0</span></div>
+                <div style="color: #1976d2">已過關: <span id="count-easy">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var initialData = [
+            {id: 1, q: "什麼是佛法中說的「三把火」？", a: "「三把火」指飢火、瞋火、欲火。其中瞋火指遇到不順心時發脾氣的心念。", e: "例：日常生活中因瑣事與家人爭吵或對同事動怒。"},
+            {id: 2, q: "為何說「一念瞋心起，百萬障門開」？", a: "「障門」指修行與人生道路上的障礙。瞋心會讓人失去理智，引發惡業。", e: "例：原本平穩的工作因一時衝動對上司發火而丟失。"},
+            {id: 3, q: "「火燒功德林」是什麼意思？", a: "指辛苦修行積累的功德，會因一次失控的發脾氣（瞋心）而毀於一旦。", e: "例：平時待人和善但因一時憤怒出口傷人，名聲與善緣會瞬間瓦解。"},
+            {id: 4, q: "瞋心對身體健康有什麼具體影響？", a: "「毒素產生」：心生惡念時體內會產生化學毒素，破壞細胞，導致生病。", e: "例：如開示提到憤怒可能導致氣血攻心，甚至休克。"},
+            {id: 5, q: "如何透過「慈心觀」來對治瞋心？", a: "「慈心觀」是專注思惟慈悲的道理，以此平息內心的憤怒與燥熱。", e: "例：當想發火時，轉念思惟對方的苦衷或想著要給予對方快樂。"},
+            {id: 6, q: "什麼是佛法中的「三毒」？", a: "指貪、瞋、痴三種根源性的煩惱，它們像毒藥一樣毒害眾生的法身慧命。", e: "例：看到好東西想據為己有（貪）、事不如意就生氣（瞋）、不明因果（痴）。"},
+            {id: 7, q: "舍利弗與鴿子的故事說明了什麼？", a: "說明修行境界的差異。佛的影子能讓鴿子安穩，因佛的慈悲已極其圓滿。", e: "例：如同孩子在嚴厲的長輩身邊會緊張，但在慈愛的老奶奶身邊會放鬆。"},
+            {id: 8, q: "在日常生活中如何落實慈悲心？", a: "從「不殺生」與「愛護小動物」做起。對待微小生命也要有憐憫之心。", e: "例：擦桌子時看到螞蟻，不直接抹死，而是輕輕敲桌子請牠離開。"},
+            {id: 9, q: "什麼是「轉煩惱成菩提」？", a: "「轉」指轉變心念；「菩提」指覺悟與智慧。即是在煩惱生起時，用智慧化解它。", e: "例：遇到別人謾罵時，心生憐憫對方也是受情緒所苦。"},
+            {id: 10, q: "為什麼說「心無遠弗屆」？", a: "指心念的力量可以超越空間限制，具備慈悲心能與眾生產生感通。", e: "例：當初散發善意與平靜時，身邊的動物也能感受到安全感。"}
+        ];
+
+        var totalCards = initialData.length;
+        var queue = [];
+        var stats = { hard: 0, effort: 0, good: 0, easy: 0 };
+        var isProcessing = false;
+        var loadedCount = 0;
+        var STORAGE_KEY = "慈心學習進度_完整音效版_V3";
+
+        // 🌟 網頁音效引擎 (Web Audio API)
+        var audioCtx = null;
+        function playSound(type) {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                var t = audioCtx.currentTime;
+                
+                if (type === 'ready') {
+                    // 準備就緒：清脆的雙響音
+                    playTone(600, 'sine', 0.1, t);
+                    playTone(800, 'sine', 0.15, t + 0.15);
+                } else if (type === 'cheer') {
+                    // 過關慶賀：歡樂的向上琶音
+                    playTone(400, 'sine', 0.1, t);
+                    playTone(500, 'sine', 0.1, t + 0.1);
+                    playTone(600, 'sine', 0.1, t + 0.2);
+                    playTone(800, 'sine', 0.3, t + 0.3);
+                }
+            } catch(e) { console.log("音效無法播放", e); }
+        }
+
+        function playTone(freq, type, duration, startTime) {
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(0.1, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+        }
+
+        function initApp() {
+            try {
+                var saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    var parsed = JSON.parse(saved);
+                    queue = parsed.queue || initialData.slice();
+                    stats = parsed.stats || { hard: 0, effort: 0, good: 0, easy: 0 };
+                } else { queue = initialData.slice(); }
+            } catch(e) { queue = initialData.slice(); }
+            
+            if (!queue || queue.length === 0) queue = initialData.slice();
+
+            for (var i = 0; i < totalCards; i++) {
+                var img = new Image();
+                img.onload = checkLoadStatus;
+                img.onerror = checkLoadStatus; 
+                img.src = "q" + initialData[i].id + ".jpg";
+            }
+        }
+
+        function checkLoadStatus() {
+            loadedCount++;
+            var progressEl = document.getElementById('loadProgress');
+            if (progressEl) progressEl.innerText = loadedCount;
+            
+            if (loadedCount === totalCards) {
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('loadingText').style.display = 'none';
+                document.getElementById('startBtn').style.display = 'block';
+                
+                // 觸發準備就緒音效
+                playSound('ready'); 
+            }
+        }
+
+        function finishLoading() {
+            // 確保喚醒音效引擎
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('appContent').style.display = 'flex';
+            updateCard();
+        }
+
+        function saveProgress() {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify({queue: queue, stats: stats})); } catch(e) {}
+        }
+
+        // 🌟 新增：重置測驗機制
+        function resetQuiz(event) {
+            if (event) event.stopPropagation();
+            try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+            
+            queue = initialData.slice();
+            stats = { hard: 0, effort: 0, good: 0, easy: 0 };
+            document.getElementById('card').classList.remove('is-flipped');
+            updateCard();
+        }
+
+        function updateCard() {
+            if (queue.length === 0) {
+                // 🌟 更新過關畫面：加入音效與「再試一次」按鈕
+                document.getElementById('card').innerHTML = '<div style="background:white; border-radius:25px; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 25px rgba(0,0,0,0.1);"><div style="font-size: 4rem; margin-bottom: 20px;">🎉</div><div style="font-size: 2rem; color: #ff9800; font-weight: bold; margin-bottom: 10px;">功德圓滿</div><div style="color: #6d4c41; font-weight:bold; margin-bottom:20px;">已完成所有複習！</div><button class="btn-retry" onclick="resetQuiz(event)">再試一次</button></div>';
+                document.getElementById('remainCount').innerText = "已完成 100%";
+                document.getElementById('progressBar').style.width = "100%";
+                try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+                
+                // 觸發慶賀音效
+                playSound('cheer');
+                return;
+            }
+
+            // 確保每次更新時，卡片正面結構依然存在（避免重置後遺失）
+            if(document.getElementById('card').innerHTML.indexOf('btn-retry') !== -1) {
+                document.getElementById('card').innerHTML = '<div class="card-face card-front"><h2 id="qText"></h2><div class="image-box"><img id="qImg" class="q-image" src="" alt="圖片" onerror="showImageError()"><div id="imgError" class="error-msg">⚠️ 找不到圖片: <span id="errName"></span></div></div><p class="hint-text">點擊卡片翻面看答案</p></div><div class="card-face card-back"><div class="ans-body"><p class="ans-text" id="aText"></p><p class="example-text" id="eText"></p></div><div class="feedback-grid"><button class="btn-fb" style="background:#ff5252;" onclick="processFeedback(\'hard\', event)">答不出</button><button class="btn-fb" style="background:#ff9800;" onclick="processFeedback(\'effort\', event)">沒記住</button><button class="btn-fb" style="background:#4caf50;" onclick="processFeedback(\'good\', event)">還不熟</button><button class="btn-fb" style="background:#2196f3;" onclick="processFeedback(\'easy\', event)">已過關</button></div></div>';
+            }
+
+            var current = queue[0];
+            document.getElementById('qText').innerText = current.q;
+            document.getElementById('aText').innerText = current.a;
+            document.getElementById('eText').innerText = current.e;
+            
+            var targetImageName = "q" + current.id + ".jpg";
+            document.getElementById('imgError').style.display = 'none';
+            document.getElementById('qImg').src = targetImageName;
+            document.getElementById('qImg').style.display = 'block';
+            document.getElementById('errName').innerText = targetImageName;
+
+            document.getElementById('count-hard').innerText = stats.hard;
+            document.getElementById('count-effort').innerText = stats.effort;
+            document.getElementById('count-good').innerText = stats.good;
+            document.getElementById('count-easy').innerText = stats.easy;
+            
+            var uniqueIds = [];
+            for(var i = 0; i < queue.length; i++) {
+                var found = false;
+                for(var j = 0; j < uniqueIds.length; j++) { if(uniqueIds[j] === queue[i].id) { found = true; break; } }
+                if(!found) uniqueIds.push(queue[i].id);
+            }
+            var uniqueRemaining = uniqueIds.length;
+            var progressPercent = ((totalCards - uniqueRemaining) / totalCards) * 100;
+            
+            document.getElementById('remainCount').innerText = "進度 " + (totalCards - uniqueRemaining) + " / " + totalCards;
+            document.getElementById('progressBar').style.width = progressPercent + "%";
+        }
+
+        function flipCard() {
+            if (queue.length > 0 && !isProcessing) {
+                var card = document.getElementById('card');
+                if (card.className.indexOf('is-flipped') === -1) {
+                    card.className += ' is-flipped';
+                } else {
+                    card.className = card.className.replace(' is-flipped', '');
+                }
+            }
+        }
+
+        function showImageError() {
+            document.getElementById('qImg').style.display = 'none';
+            document.getElementById('imgError').style.display = 'block';
+        }
+
+        function processFeedback(type, event) {
+            event.stopPropagation();
+            if (isProcessing) return; 
+            isProcessing = true;
+            
+            var card = document.getElementById('card');
+            card.className = card.className.replace(' is-flipped', '');
+
+            setTimeout(function() {
+                stats[type]++;
+                var currentItem = queue.shift(); 
+                
+                if (type === 'hard') { queue.splice(Math.min(queue.length, 1), 0, currentItem); } 
+                else if (type === 'effort') { queue.splice(Math.min(queue.length, 2), 0, currentItem); } 
+                else if (type === 'good') { queue.push(currentItem); }
+
+                saveProgress(); 
+                updateCard();   
+                isProcessing = false; 
+            }, 400); 
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
